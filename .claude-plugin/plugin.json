@@ -1,0 +1,23 @@
+{
+  "name": "preprod-check",
+  "displayName": "Pre-Prod Readiness Check",
+  "version": "1.0.0",
+  "description": "Structured pre-production readiness audit across 14 categories (auth, input validation, billing integrity, rate limiting, cost containment, SSRF/uploads, secrets, headers/cookies, CORS, DB, logging, email/password flows, legal, ops). Adapts to the detected stack and produces a severity-grouped findings report with drafted patches.",
+  "author": {
+    "name": "Kevin Cui",
+    "url": "https://github.com/kevincui1034"
+  },
+  "homepage": "https://github.com/kevincui1034/preprod-check",
+  "repository": "https://github.com/kevincui1034/preprod-check",
+  "license": "MIT",
+  "keywords": [
+    "security",
+    "audit",
+    "production-readiness",
+    "launch-checklist",
+    "preprod",
+    "go-live",
+    "claude-code",
+    "skill"
+  ]
+}

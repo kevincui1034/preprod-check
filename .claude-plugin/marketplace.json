@@ -1,0 +1,24 @@
+{
+  "name": "preprod-check",
+  "owner": {
+    "name": "Kevin Cui",
+    "url": "https://github.com/kevincui1034"
+  },
+  "metadata": {
+    "description": "A single-skill marketplace distributing the Pre-Prod Readiness Check skill for Claude Code."
+  },
+  "plugins": [
+    {
+      "name": "preprod-check",
+      "source": "./",
+      "description": "Pre-production readiness audit across 14 categories. Produces a severity-grouped findings report and drafts patches for trivial fixes.",
+      "version": "1.0.0",
+      "keywords": [
+        "security",
+        "audit",
+        "production-readiness",
+        "launch-checklist"
+      ]
+    }
+  ]
+}
