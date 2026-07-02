@@ -3,102 +3,131 @@ name: preprod-check
 description: >-
   Use this skill when the user asks for a pre-production readiness check,
   launch checklist, "is this safe to ship", "go-live review", "prod audit",
-  or any variant of "what should I check before deploying". Performs a
-  structured audit covering auth/multi-tenancy, input validation, billing
-  & credit integrity, rate limiting, cost containment, external-request
-  safety (SSRF, uploads), secrets/env, security headers/cookies, error
-  handling, CORS, database (indexes/backups), logging & monitoring,
-  email/password flows, legal/compliance, and operations. Adapts checks
-  to the detected stack (Next.js, Auth.js, Stripe, Supabase, Drizzle,
-  AI SDKs, blob storage, etc.). Produces a severity-grouped findings
-  report and drafts patches for trivial fixes. Also invocable as
-  `/preprod-check`.
+  or any variant of "what should I check before deploying". Fans a structured
+  audit out across parallel sub-agents covering auth/multi-tenancy, input
+  validation, billing & credit integrity, rate limiting, cost containment,
+  external-request safety (SSRF, uploads), secrets/env, security
+  headers/cookies, error handling, CORS, database, logging & monitoring,
+  email/password flows, AI/LLM safety, performance & scalability,
+  legal/compliance, and operations. Adapts checks to the detected stack
+  (Next.js, Auth.js, Stripe, Supabase, Drizzle, AI SDKs, blob storage, etc.),
+  verifies findings before reporting, and produces a severity-grouped report
+  with drafted patches for trivial fixes. Also invocable as `/preprod-check`.
 metadata:
   author: kevincui1034
-  version: "1.0.0"
+  version: "1.1.0"
 ---
 
-# Pre-Prod Readiness Check
+# 🚀 Pre-Prod Readiness Check
 
-Audit a project for production readiness across 14 categories. Adapt to the detected stack. Produce a **severity-grouped** report with file:line refs, then propose patches for trivial fixes (security headers, cookie flags, env schema, etc.) for user approval.
+Audit a project for production readiness across **16 categories**, then produce a **severity-grouped** report with `file:line` refs and drafted patches for the trivial fixes.
 
-This skill assumes a TypeScript/Next.js web app by default but degrades gracefully — skip categories that don't apply to the detected stack (e.g., skip "billing & credit integrity" if there's no Stripe).
+---
 
-## How to use this skill
+## At a glance
 
-Run the **workflow** in order. Each step has a purpose; don't skip the discovery phase or the checks become generic.
+| | |
+|---|---|
+| **What it does** | Greps the codebase for known launch-blocking gaps — auth bypass, money leaks, SSRF, secret exposure, missing rate limits, and more. |
+| **How it runs** | Detects the stack → **fans the audit out across parallel sub-agents** (one per category cluster) → merges + **verifies every Critical/High** → reports. |
+| **What you get** | A severity-ordered findings list (Critical → Low), each one line with a `file:line` and a fix sketch, plus drafted patches for the mechanical fixes on request. |
+| **Default stack** | Assumes a TypeScript/Next.js web app but degrades gracefully — categories that don't apply to the detected stack are skipped, not padded. |
 
-The **check catalog** at the bottom is the source of truth for what to inspect — refer to it during step 2, but report findings using the severity rubric, not by catalog category.
+> **Read-only until you approve.** The audit phase only inspects. Patches are drafted one-at-a-time in the final step and never written without explicit approval.
+
+---
+
+## Category map
+
+Fan the audit out along these clusters. Each is one sub-agent; skip any whose categories are all N/A for the stack.
+
+| Cluster | Categories | Typical ceiling |
+|---|---|---|
+| 🔐 **Access & tenancy** | 1 Auth & multi-tenant · 2 Input validation & injection | Critical |
+| 💳 **Money & abuse** | 3 Billing & credit integrity · 4 Rate limiting · 5 Cost containment | Critical |
+| 🛡️ **Perimeter & secrets** | 6 External-request safety (SSRF/uploads) · 7 Secrets & env · 8 Headers & cookies | Critical |
+| 🩺 **Reliability & data** | 9 Error handling · 10 Database · 11 Logging & monitoring | High |
+| 👤 **Accounts, legal & ops** | 12 Email & password · 13 Legal & compliance · 14 Operations & supply chain | High |
+| 🤖 **AI/LLM safety** | 15 AI/LLM safety *(only if an AI SDK is detected)* | High |
+| ⚡ **Performance** | 16 Performance & scalability | High |
 
 ---
 
 ## Workflow
 
+Run the steps in order. Discovery (Step 1) feeds the fan-out (Step 2); don't skip it or the checks go generic.
+
 ### Step 1 — Stack detection (parallel reads)
 
-Read these in parallel, then write a one-paragraph stack summary before doing any checks:
+Read these in parallel, then write a **one-paragraph stack summary** before any checks:
 
-- `package.json` — frameworks, AI SDKs, payment SDKs, ORM, auth libs
-- `next.config.*` / `vite.config.*` / similar — framework config
-- `tsconfig.json` — strict mode, path aliases
-- `CLAUDE.md` and `AGENTS.md` (if present) — project conventions
-- `.env.example` (if present) — declared env surface
-- `src/lib/db/schema.*` or `prisma/schema.prisma` or `drizzle.config.*` — DB shape
-- `src/proxy.ts` / `src/middleware.ts` / `src/auth.*` — auth wiring
-- `src/app/api/**` or `pages/api/**` directory listing — API surface (use Glob, don't read all)
+| Read | For |
+|---|---|
+| `package.json` | frameworks, AI SDKs, payment SDKs, ORM, auth libs |
+| `next.config.*` / `vite.config.*` | framework config |
+| `tsconfig.json` | strict mode, path aliases |
+| `CLAUDE.md` / `AGENTS.md` | project conventions |
+| `.env.example` | declared env surface |
+| `src/lib/db/schema.*` / `prisma/schema.prisma` | DB shape |
+| `src/proxy.ts` / `src/middleware.ts` / `src/auth.*` | auth wiring |
+| `src/app/api/**` / `pages/api/**` (Glob, don't read all) | API surface |
 
-**Detect**:
-- Framework + version (Next.js 16 vs 15 differs; React Router vs Next; etc.)
-- Auth library (Auth.js v5 / Clerk / Lucia / custom)
-- Payment processor (Stripe / Lemon Squeezy / none)
-- DB (Postgres via Supabase / Neon / Vercel; MySQL; SQLite) + ORM (Drizzle / Prisma / Kysely)
-- AI / external APIs (Anthropic, Gemini, OpenAI, Replicate, Fal, Apify, Resend)
-- File storage (Vercel Blob, S3, R2)
-- Hosting target (Vercel, Cloudflare, self-hosted)
+**Detect and record:** framework + version · auth library · payment processor · DB + ORM · AI/external APIs · file storage · hosting target. This summary is passed verbatim to every sub-agent.
 
-Skip catalog categories that don't apply. E.g., no Stripe → skip §3.
+### Step 2 — Fan the audit out to sub-agents
 
-### Step 2 — Run checks (catalog below)
+The categories are independent, so audit them **concurrently**. Spawn one sub-agent per applicable cluster (see the Category map), in a **single batch** so they run in parallel. Give each agent: (a) the Step 1 stack summary, and (b) the catalog sections for its cluster.
 
-Walk the **check catalog** below. For each applicable check:
-1. Use Grep / Read / Glob to locate the relevant code.
-2. Where the catalog calls for a diagnostic command, run it (npm audit, lint, env grep). Don't run network calls or destructive commands.
-3. Record findings with `file:line` and a one-line description.
-4. Assign severity using the rubric.
+**Rules for the fan-out** (these are what make parallel audits reliable):
 
-Be evidence-driven. Don't report a "missing CSP" as a finding if you haven't actually grepped for `Content-Security-Policy` and confirmed it's absent.
+- **Leaf agents only.** Each agent greps/reads and reports itself — it must **not** spawn its own sub-agents (nested agents stall and return status text instead of findings).
+- **Read-only.** Audit agents inspect and report; they do **not** edit. Patching happens in Step 5, in the main loop, after approval.
+- **Structured, evidence-bearing return.** Require each agent's final message to be a findings list — one row per finding:
+
+  `severity | file:line | what's wrong | fix sketch | evidence`
+
+  The **evidence** field (the grep hit / the actual line that proves it) is mandatory — it's what lets you verify without re-running the whole search.
+- **Evidence-driven, not vibes.** An agent must not report "missing CSP" unless it actually grepped for `Content-Security-Policy` and confirmed absence. Tell it so.
+
+**Then, back in the main loop:**
+
+1. **Merge & de-dupe** across agents — the same gap (e.g. a missing header) can surface from two clusters.
+2. **Verify every Critical and High before reporting.** Re-open each cited `file:line` and confirm the evidence really shows the problem — audit agents over-flag. Demote or drop anything you can't confirm. For a deep audit, spawn one adversarial verifier per Critical whose job is to *disprove* it; keep the finding only if it survives.
+3. Assign final severity (Step 3) and write the report (Step 4).
+
+> For a large or repeatable audit, the whole fan-out → verify → synthesize can run as a single deterministic `Workflow` — but only when the user has opted into orchestration. Otherwise plain parallel `Agent` calls are fine.
 
 ### Step 3 — Severity rubric
 
 | Severity | Meaning | Examples |
-| --- | --- | --- |
-| **Critical** | Money loss, data leak, or auth bypass possible today | Webhook handler skips idempotency insert; credit ledger has no concurrency guard; server action missing `auth()`; SSRF on a URL fetcher; secret in client bundle |
-| **High** | Realistic incident path; not actively bleeding | No per-user $ ceiling; no CSP; mime not sniffed on uploads; password reset token has no expiry; missing env validation at boot |
-| **Medium** | Hygiene gap; would slow incident response or DX | Missing structured logs; no Sentry filter; FK column lacking index; no health check endpoint |
-| **Low** | Polish; would be embarrassing but not damaging | 500 page leaks stack trace; missing privacy policy link; cookie flags relying on framework defaults rather than explicit |
+|---|---|---|
+| 🔴 **Critical** | Money loss, data leak, or auth bypass possible **today** | Webhook skips idempotency insert; credit ledger has no concurrency guard; server action missing `auth()`; SSRF on a URL fetcher; secret in client bundle |
+| 🟠 **High** | Realistic incident path; not actively bleeding | No per-user $ ceiling; no CSP; upload mime not sniffed; reset token never expires; no env validation at boot |
+| 🟡 **Medium** | Hygiene gap; would slow incident response or DX | No structured logs; no Sentry filter; FK column lacks index; no health check |
+| ⚪ **Low** | Polish; embarrassing but not damaging | 500 page leaks stack trace; missing privacy-policy link; cookie flags left to framework defaults |
 
-When in doubt, **err one level higher** — a single false-positive Critical is cheaper than missing a real one.
+When in doubt, **err one level higher** — a false-positive Critical is cheaper than a missed one. (This is why Step 2 verifies Critical/High: err high while auditing, then confirm before it reaches the report.)
 
 ### Step 4 — Output the report
 
-Output in this exact structure (markdown). Group by severity, not by catalog category. Each finding is one bullet:
+Group by **severity**, not by category. One line per finding.
 
 ```
 ## Pre-Prod Findings — <project name> (<date>)
 
 **Stack detected**: <one-line summary>
-**Categories checked**: <comma-separated, with skipped ones in parens>
+**Categories checked**: <list, with skipped ones in parens>
 
-### Critical (N)
+### 🔴 Critical (N)
 - [file.ts:42](src/file.ts#L42) — <what's wrong>. Fix: <one-line sketch>.
 
-### High (N)
+### 🟠 High (N)
 - ...
 
-### Medium (N)
+### 🟡 Medium (N)
 - ...
 
-### Low (N)
+### ⚪ Low (N)
 - ...
 
 ### Skipped / not applicable
@@ -106,133 +135,184 @@ Output in this exact structure (markdown). Group by severity, not by catalog cat
 
 ### Patches I can draft now
 - <finding> — would touch <file:line>
-- ...
 ```
 
-Keep each finding to **one line**. Detail belongs in the patch, not the report.
+Keep each finding to **one line** — detail belongs in the patch, not the report.
 
 ### Step 5 — Propose patches
 
 After the report, ask which findings to patch. For each approved one:
-- Show a unified diff or a complete file rewrite for new files.
-- Stick to the trivial / mechanical fixes from the **Patch templates** section. Don't draft business-logic changes (e.g., credit ledger redesign) — flag those as needing a follow-up plan.
 
-**Always** wait for explicit approval before editing. Don't batch — one finding, one patch, one approval.
+- Show a unified diff (or a full file for new files).
+- Stick to the mechanical fixes in **Patch templates**. Don't draft business-logic changes (e.g. a credit-ledger redesign) — flag those as needing a follow-up plan.
+- **One finding, one patch, one approval.** Always wait for explicit approval before editing; don't batch.
 
 ---
 
 ## Check catalog
 
-Each section: what to grep, what counts as a finding, default severity.
+The source of truth for what to inspect. Each row: **the check** · **how to detect it** · **default severity**. Refer to it during Step 2; report using the severity rubric, not by category.
 
 ### 1. Authentication & multi-tenant isolation
 
-- **Every server action / route handler begins with an auth check.** Grep `server-only` modules and `actions.ts` files for the pattern `await auth()` (or equivalent). Any action missing it → **Critical**.
-- **Cross-tenant joins re-verify ownership server-side.** Grep for FK columns that come from request input (`userId`, `projectId`, `personaId` etc.) and trace whether the handler re-scopes to `session.user.id` before using them. Missing scope → **Critical**.
-- **JWT/session callbacks refresh sensitive fields per-request.** If plan, ban status, or session-invalidation timestamps are mirrored on the session, the callback must re-read them. Stale session = stale plan / unrevoked sessions. **High**.
-- **Middleware/proxy and layout both gate auth.** Defense-in-depth — both should redirect unauthed. Single layer → **Medium**.
-- **Password reset bumps session-invalidation timestamp** to revoke other sessions. Missing → **High**.
+| Check | How to detect | Sev |
+|---|---|---|
+| Every server action / route handler starts with an auth check | grep `actions.ts` + `server-only` modules for `await auth()` (or equiv); flag any handler missing it | 🔴 |
+| Cross-tenant joins re-verify ownership server-side | trace request-supplied FK ids (`userId`, `projectId`, …) — must re-scope to `session.user.id` before use | 🔴 |
+| Session/JWT callback refreshes sensitive fields per-request | if plan / ban / session-invalidation is mirrored on the session, the callback must re-read it | 🟠 |
+| Middleware/proxy **and** layout both gate auth (defense-in-depth) | single layer only | 🟡 |
+| Password reset bumps a session-invalidation timestamp | revokes other sessions; missing | 🟠 |
 
 ### 2. Input validation & injection
 
-- **Zod (or similar) on every server action input.** Grep for `formData.get(` followed by direct DB writes without a schema parse. Unvalidated input flowing to DB → **High**.
-- **Parameterized queries everywhere.** Grep for template-string SQL (`` `SELECT ... ${...}` ``) outside of `sql` tagged templates. Raw interpolation → **Critical**.
-- **No `dangerouslySetInnerHTML`** on user-supplied content without DOMPurify (or equivalent). **High**.
-- **Path traversal on file ops.** Anywhere `fs.readFile` / `fs.writeFile` / Blob keys derive from user input — must `path.normalize` and reject `..`. **High**.
-- **Redirect URL validation.** Open redirects via `?next=` or `?callbackUrl=` must whitelist host. **High**.
+| Check | How to detect | Sev |
+|---|---|---|
+| Parameterized queries everywhere | grep template-string SQL `` `… ${…}` `` outside `sql` tagged templates | 🔴 |
+| Zod (or similar) on every server-action input | grep `formData.get(` flowing to a DB write with no schema parse | 🟠 |
+| No `dangerouslySetInnerHTML` on user content without sanitization | grep the sink; require DOMPurify or equiv | 🟠 |
+| Path-traversal guard on file ops | `fs.*`/blob keys from user input must `path.normalize` + reject `..` | 🟠 |
+| Redirect-URL validation | open redirects via `?next=`/`?callbackUrl=` must allowlist host | 🟠 |
 
-### 3. Billing & credit integrity (skip if no Stripe / no in-app currency)
+### 3. Billing & credit integrity *(skip if no payments / no in-app currency)*
 
-- **Webhook signature verification before any DB write.** Grep the webhook route for `stripe.webhooks.constructEvent` (or processor equivalent) — must happen before parsing body. **Critical** if missing.
-- **Webhook idempotency table.** Every handler inserts the event ID first and bails on conflict. Grep webhook handlers for an idempotency insert. Missing → **Critical**.
-- **Credit ledger concurrency guard.** A `SELECT … FOR UPDATE`, optimistic version column, or DB-level `CHECK (balance >= 0)`. Without it, parallel debits can go negative. **Critical**.
-- **Refund-on-failure audit.** For each external-API call charged to credits, trace every error branch — every one must refund. List any path that doesn't. **Critical** per missing branch.
-- **Monthly grant uses `GREATEST(balance, allotment)`** (not blind set) so top-up purchases survive grants. **High** if blind set.
-- **Provider-specific pricing tables stay in sync.** If credit costs live in one file and USD-per-unit in another, drift = margin loss. Flag tuples present in one but missing in the other. **High**.
+| Check | How to detect | Sev |
+|---|---|---|
+| Webhook signature verified before any DB write | grep route for `constructEvent` (or equiv) ahead of body parse | 🔴 |
+| Webhook idempotency — insert event id first, bail on conflict | grep handlers for the idempotency insert | 🔴 |
+| Credit-ledger concurrency guard | `SELECT … FOR UPDATE`, version column, or `CHECK (balance >= 0)` | 🔴 |
+| Refund on every failure branch of a charged external call | trace each error path; list any that don't refund | 🔴 |
+| Monthly grant uses `GREATEST(balance, allotment)` (not blind set) | grep the grant | 🟠 |
+| Cost / price tables stay in sync | if credit-cost and USD-per-unit live in separate files, flag tuples present in one, missing in the other | 🟠 |
 
 ### 4. Rate limiting & abuse
 
-- **Per-user daily $ ceiling** on AI/LLM/render spend, independent of credit balance and quota. Catches runaway loops and prompt-injection cost attacks. Missing → **High**.
-- **Quota gate on every external API call** the user triggers. Grep for `fetch(` to known AI/scraper hosts in server modules and verify each is preceded by a quota or credit check. **High** per gap.
-- **IP rate limit on signup / login / password reset.** Upstash Ratelimit, Vercel KV, or similar. Missing on auth endpoints → **High**.
-- **Webhook endpoints aren't rate-limited the same way** (signature is the gate), but verify they reject unsigned requests fast (cheap 401 before any work). **Medium**.
+| Check | How to detect | Sev |
+|---|---|---|
+| Per-user daily **$ ceiling** on AI/render spend (independent of quota) | catches runaway loops / prompt-injection cost attacks | 🟠 |
+| Quota/credit gate on every user-triggered external call | grep `fetch(` to AI/scraper hosts in server modules; verify a gate precedes each | 🟠 |
+| IP rate limit on signup / login / password reset | Upstash, Vercel KV, or similar on auth endpoints | 🟠 |
+| Webhooks reject unsigned requests fast (cheap 401 before work) | grep for early signature check | 🟡 |
 
 ### 5. Cost containment & external API safety
 
-- **Timeouts on every external call.** Grep for `fetch(` without `AbortSignal.timeout` or equivalent. Default timeout < platform function ceiling. **High** per uncapped call.
-- **Cost anomaly alerts.** Some mechanism (Sentry, PostHog, cron) that flags > N× rolling-median daily spend. Missing → **Medium**.
-- **Circuit breaker / retry budget** on flaky providers. Missing isn't critical but means a provider outage can hang functions. **Low/Medium**.
-- **`maxDuration` / `memory` config on long-running routes.** Mismatch between actual work and config → silent timeouts. **Medium**.
+| Check | How to detect | Sev |
+|---|---|---|
+| Timeout on every external call | grep `fetch(` without `AbortSignal.timeout`; must be < platform function ceiling | 🟠 |
+| Cost-anomaly alert (> N× rolling-median daily spend) | some Sentry/PostHog/cron mechanism | 🟡 |
+| Circuit breaker / retry budget on flaky providers | missing means a provider outage hangs functions | 🟡 |
+| `maxDuration` / `memory` matches actual work | mismatch → silent timeouts | 🟡 |
 
 ### 6. External-request safety (SSRF, uploads, blob URLs)
 
-- **SSRF blocklist on any URL the server fetches from user input.** Block: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`, `169.254.0.0/16` (cloud metadata!), `::1`, `fc00::/7`. Resolve DNS first, then check. **Critical** if missing on user-supplied URL fetchers.
-- **Upload mime sniffing.** Server reads first bytes; doesn't trust `Content-Type`. **High** if absent.
-- **Size caps enforced server-side** (not just client). Grep for `maxSize` / content-length checks on upload routes. **High** if client-only.
-- **Blob/storage URL host validation** on routes that accept URLs back from the upload service. Pin to your bucket/blob host. **High**.
+| Check | How to detect | Sev |
+|---|---|---|
+| SSRF blocklist on any server fetch of a user-supplied URL | resolve DNS first, then check against the blocked ranges below | 🔴 |
+| Upload mime **sniffed** server-side (first bytes, not `Content-Type`) | grep upload route | 🟠 |
+| Size caps enforced server-side (not just client) | grep `maxSize`/content-length on upload routes | 🟠 |
+| Blob/storage URL host validation | pin URLs returned from the upload service to your bucket/blob host | 🟠 |
+
+> **SSRF blocked ranges:** `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`, `169.254.0.0/16` (**cloud metadata!**), `::1`, `fc00::/7`. Resolve the hostname to an IP first, then test the IP — a public hostname can resolve to a private address.
 
 ### 7. Secrets & env
 
-- **No secrets in client bundle.** Grep `NEXT_PUBLIC_` (or framework equivalent) for anything that looks like a key/secret/token. **Critical** per leak.
-- **Env validation at boot.** A zod (or t3-env) schema that throws on missing required vars at startup. **High** if absent.
-- **`.env*` in `.gitignore`** (except `.env.example`). Verify with `git check-ignore`. **Critical** if `.env.local` is tracked.
-- **Secrets aren't logged.** Grep `console.log` near auth/payment/AI modules for variables that match env names. **High** per leak.
+| Check | How to detect | Sev |
+|---|---|---|
+| No secrets in the client bundle | grep `NEXT_PUBLIC_` (or equiv) for anything key/secret/token-shaped | 🔴 |
+| `.env.local` not tracked in git | `git check-ignore .env.local`; `.env.example` is the only committed env file | 🔴 |
+| Env validation at boot (schema throws on missing required vars) | grep for a zod/t3-env schema imported by the entrypoint | 🟠 |
+| Secrets not logged | grep `console.log` near auth/payment/AI modules for env-named vars | 🟠 |
 
 ### 8. Security headers & cookies
 
-- **CSP, HSTS, `X-Frame-Options`, `Referrer-Policy`, `X-Content-Type-Options: nosniff`** set via middleware/proxy or `next.config.headers()`. Missing CSP → **High**; others → **Medium**.
-- **Cookie flags**: `httpOnly`, `secure`, `sameSite=lax` (or `strict`) on session cookies. If relying on framework defaults, verify in prod build. **Medium**.
-- **CORS** allowlist is explicit (not `*`) on any authed endpoint. **High** if wildcard.
+| Check | How to detect | Sev |
+|---|---|---|
+| CSP set (via middleware/proxy or `headers()`) | grep `Content-Security-Policy` | 🟠 |
+| HSTS, `X-Frame-Options`, `Referrer-Policy`, `X-Content-Type-Options: nosniff` | grep each | 🟡 |
+| Session cookie flags: `httpOnly` + `secure` + `sameSite` | verify explicit, not relying on framework defaults | 🟡 |
+| CORS allowlist explicit (not `*`) on authed endpoints | grep for wildcard origin | 🟠 |
 
 ### 9. Error handling & UX fallbacks
 
-- **Error boundaries** (`error.tsx` in Next App Router, or framework equivalent) on every major route segment. Missing → **Medium**.
-- **`not-found.tsx` / 404 page** exists. **Low** if missing.
-- **No stack traces in user-facing responses.** Grep API route catches for `error.stack` or `error.message` returned to client. **High** if stack leaks; **Medium** if message leaks (depends on what message can contain).
-- **Friendly fallback for quota / rate-limit / credit-exhausted errors** — these are expected, not exceptional. **Medium** if shown as generic "Something went wrong."
+| Check | How to detect | Sev |
+|---|---|---|
+| No stack traces / raw messages in user-facing responses | grep API catches returning `error.stack`/`error.message` | 🟠 |
+| Error boundaries on major route segments (`error.tsx` or equiv) | grep the segments | 🟡 |
+| Friendly fallback for quota/rate-limit/credit-exhausted (expected, not exceptional) | grep how those errors surface | 🟡 |
+| `not-found` / 404 page exists | grep | ⚪ |
 
 ### 10. Database
 
-- **Indexes on most-queried columns** — FK columns used in joins/filters, `created_at` if sorted on, anything in `WHERE` clauses of hot queries. Read the schema, grep top server modules for `.where(` / `.eq(` / etc. **Medium** per missing index on hot path.
-- **Backups / PITR enabled** on the prod DB. Can't verify in code; surface as a manual check in the report. **Medium**.
-- **Migrations are forward-only and reviewed.** No `db:push` against prod (dev-only command). **Low** unless evidence of misuse.
-- **Sensitive tables** (users, sessions, payments) have proper `ON DELETE` semantics — `CASCADE` for owned rows, `RESTRICT` for audit logs. **Medium** per missing.
+| Check | How to detect | Sev |
+|---|---|---|
+| Indexes on hot columns (FKs in joins/filters, sorted `created_at`, `WHERE` cols) | read schema; grep `.where(`/`.eq(` in top modules | 🟡 |
+| `ON DELETE` semantics right on sensitive tables (`CASCADE` owned, `RESTRICT` audit) | read schema | 🟡 |
+| Backups / PITR enabled on prod DB | can't verify in code — surface as a manual check | 🟡 |
+| No `db:push` against prod (dev-only) | grep scripts / docs for misuse | ⚪ |
 
 ### 11. Logging & monitoring
 
-- **Structured logs** (JSON) in prod, not just `console.log` strings. Either via a logger lib or `JSON.stringify`. **Medium** if absent.
-- **Sentry / equivalent** configured with a `beforeSend` filter that drops expected user errors (quota exceeded, validation failures) so noise doesn't drown signal. **Medium**.
-- **No PII in logs.** Grep logging calls for `email`, `phone`, full names, tokens. **High** per leak.
-- **Health check endpoint** (`/api/health`) returns DB + critical-dependency status. **Low/Medium**.
+| Check | How to detect | Sev |
+|---|---|---|
+| No PII in logs (email, phone, names, tokens) | grep logging calls | 🟠 |
+| Structured (JSON) logs in prod, not bare `console.log` strings | grep logger usage | 🟡 |
+| Error tracker (Sentry/equiv) with `beforeSend` dropping expected user errors | grep init | 🟡 |
+| Health-check endpoint returns DB + critical-dep status | grep `/api/health` | 🟡 |
 
 ### 12. Email & password
 
-- **Password hashing**: argon2id or bcrypt with appropriate cost. Plain SHA, MD5, or any unhashed storage → **Critical**.
-- **Password reset tokens**: single-use, expiry ≤ 1h, sent via signed link. Multi-use or no expiry → **High**.
-- **SPF / DKIM / DMARC records** on the sender domain — can't verify from code; surface as a manual DNS check. **High** if production traffic, none configured.
-- **Bounce/complaint handling** on transactional email provider (Resend, SES, Postmark) to avoid reputation damage. **Medium**.
-- **Email verification required** before account-affecting actions (password change, etc.). **Medium**.
+| Check | How to detect | Sev |
+|---|---|---|
+| Password hashing is argon2id / bcrypt with sane cost | grep hashing; plain SHA/MD5/unhashed | 🔴 |
+| Reset tokens single-use, expiry ≤ 1h, signed link | grep token issue/verify | 🟠 |
+| SPF / DKIM / DMARC on sender domain | can't verify in code — surface as manual DNS check | 🟠 |
+| Email verification required before account-affecting actions | grep the flows | 🟡 |
+| Bounce/complaint handling on the email provider | grep webhook/config | 🟡 |
 
 ### 13. Legal & compliance
 
-- **Privacy policy + ToS** linked from signup and footer. Required by Stripe, Google OAuth verification, app stores. Missing → **High** (blocks integrations) or **Low** (purely legal exposure) depending on context.
-- **Account deletion path** that purges or anonymizes PII and cascades the FK graph. GDPR/CCPA. **Medium**.
-- **Data export endpoint** (less urgent than deletion). **Low**.
-- **Cookie consent** if serving EU traffic and using non-essential cookies. **Medium** for EU traffic.
+| Check | How to detect | Sev |
+|---|---|---|
+| Privacy policy + ToS linked from signup + footer (Stripe/OAuth require it) | grep routes/footer | 🟠/⚪ |
+| Account deletion that purges/anonymizes PII + cascades FKs (GDPR/CCPA) | grep for the path | 🟡 |
+| Cookie consent if serving EU traffic with non-essential cookies | grep | 🟡 |
+| Data-export endpoint | grep | ⚪ |
 
 ### 14. Operations & supply chain
 
-- **`npm audit` (or `pnpm audit --prod`)** — run it; report HIGH and CRITICAL vulns. **High** per critical CVE in a runtime dep.
-- **Dependency pinning**: lockfile committed, no `^` ranges on security-critical libs in deploys. Lockfile is the main gate. **Low** if lockfile present.
-- **Env parity**: a staging/preview env separate from prod. **Medium** if everything is one env.
-- **CI/CD secrets** not echoed in logs. Can't always verify, but spot-check `.github/workflows/` for `echo $SECRET`-style patterns. **High** per leak.
-- **No `--no-verify` / `--no-gpg-sign`** in committed scripts. **Low**.
+| Check | How to detect | Sev |
+|---|---|---|
+| `npm audit` / `pnpm audit --prod` — report HIGH/CRITICAL runtime CVEs | run it | 🟠 |
+| CI/CD secrets not echoed in logs | spot-check `.github/workflows/` for `echo $SECRET`-style | 🟠 |
+| Lockfile committed; no `^` ranges on security-critical deploy deps | check lockfile presence | ⚪ |
+| Staging/preview env separate from prod | one-env setup | 🟡 |
+| No `--no-verify` / `--no-gpg-sign` in committed scripts | grep | ⚪ |
+
+### 15. AI / LLM safety *(skip if no AI/LLM SDK)*
+
+| Check | How to detect | Sev |
+|---|---|---|
+| Prompt-injection trust boundary on tool-calling agents | trace untrusted content (scraped pages, uploads, transcripts) into a model that can call privileged tools | 🟠 |
+| Model output not rendered as raw HTML without sanitization (stored XSS via `<script>`/`javascript:`) | grep `dangerouslySetInnerHTML` / markdown renderers fed model output | 🟠 |
+| Per-request token/cost cap (max output tokens set, input truncated) | grep model calls; unbounded context (long transcripts, recursive loops) = runaway spend | 🟠 |
+| Tool-calling / agent loops have a max-iteration cap | grep the loop | 🟡 |
+| PII/secrets not sent to third-party models beyond need; a data stance exists | trace user data into external-provider prompts | 🟡 |
+| System prompt not leaked to client (bundle or responses) | grep client-reachable code | 🟡 |
+
+### 16. Performance & scalability
+
+| Check | How to detect | Sev |
+|---|---|---|
+| No unbounded queries — list endpoints paginate / `LIMIT` | grep `.findMany(`/`select` without a limit on list routes | 🟠 |
+| No N+1 in hot paths (query-in-a-loop) | grep `await` inside `.map(`/`for` over DB calls | 🟡 |
+| Connection pooling correct for serverless (pgbouncer / driver mode) | check DB URL + driver against hosting model | 🟠 |
+| Caching on expensive read-hot endpoints (or a documented reason not to) | grep for cache usage / `revalidate` | 🟡 |
+| Large payloads streamed, not buffered wholly in memory | grep routes returning big blobs/arrays | 🟡 |
 
 ---
 
 ## Patch templates
 
-These are the trivial fixes the skill should be willing to draft. Each is a known-shape, mechanical change — not architectural.
+The trivial, known-shape fixes the skill may draft (mechanical, not architectural).
 
 ### Security headers (Next.js 16)
 
@@ -247,13 +327,13 @@ async headers() {
       { key: "X-Content-Type-Options", value: "nosniff" },
       { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
       { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
-      { key: "Content-Security-Policy", value: "<draft a CSP based on the detected stack — be conservative; flag any inline scripts in the report>" },
+      { key: "Content-Security-Policy", value: "<draft a CSP from the detected stack — be conservative; flag inline scripts in the report>" },
     ],
   }];
 }
 ```
 
-For CSP, **don't draft a wildcard `unsafe-inline` policy** to make it "work" — list the actual hosts the app loads from (Stripe.js, Google fonts, analytics, etc.) based on grep findings.
+For CSP, **don't draft a wildcard `unsafe-inline` policy** to make it "work" — list the actual hosts the app loads from (payment SDK, fonts, analytics) based on grep findings.
 
 ### Env validation at boot
 
@@ -274,7 +354,7 @@ export const env = schema.parse(process.env);
 
 Then `import "@/env";` at the top of the auth/db entrypoints so it throws at boot.
 
-### Stripe webhook idempotency (Drizzle example)
+### Webhook idempotency (Drizzle example)
 
 ```ts
 await db.insert(processedStripeEvent).values({ id: event.id }).onConflictDoNothing();
@@ -304,11 +384,9 @@ export async function assertPublicHost(url: string) {
 }
 ```
 
-Call `await assertPublicHost(url)` before any server-side fetch of user-supplied URLs.
+Call `await assertPublicHost(url)` before any server-side fetch of a user-supplied URL.
 
 ### Upload mime sniffing
-
-Use `file-type` (already common in the Node ecosystem):
 
 ```ts
 import { fileTypeFromBuffer } from "file-type";
@@ -321,8 +399,6 @@ if (!sniffed || !ALLOWED_MIMES.has(sniffed.mime)) {
 ```
 
 ### Cookie flags (Auth.js v5)
-
-If not relying on defaults, explicit in `auth.config.ts`:
 
 ```ts
 cookies: {
@@ -350,9 +426,11 @@ Sentry.init({
 
 ## Don'ts
 
-- **Don't draft architectural patches.** A credit-ledger race fix is a design discussion, not a Write call. Flag it in the report and stop.
-- **Don't run destructive or network-spending commands.** No `db:push`, no API calls that cost money, no `npm install` of new deps without approval.
-- **Don't invent findings.** If you couldn't locate the relevant code, say so in the report ("could not locate webhook handler — skipped").
-- **Don't run all 14 categories on a tiny app.** If the stack detection shows no Stripe, no DB, no uploads — skip those sections rather than pad the report with N/A entries.
-- **Don't echo back the entire catalog as the report.** Only findings + skipped sections.
-- **Don't claim "no issues found" without naming what you actually inspected.** If the report has zero High+ findings, list the file paths and grep patterns that produced that conclusion.
+- **Don't draft architectural patches.** A credit-ledger race fix is a design discussion, not a Write call. Flag it and stop.
+- **Don't let audit sub-agents edit or spawn their own sub-agents.** They are read-only leaves that return findings; patching and orchestration stay in the main loop.
+- **Don't report a Critical/High you haven't verified.** Agents over-flag — re-open the cited line and confirm the evidence before it reaches the report.
+- **Don't run destructive or money-spending commands.** No `db:push`, no paid API calls, no installing new deps without approval.
+- **Don't invent findings.** If you couldn't locate the relevant code, say so ("could not locate webhook handler — skipped").
+- **Don't run all 16 categories on a tiny app.** Skip inapplicable clusters rather than pad the report with N/A entries.
+- **Don't echo the whole catalog back as the report.** Only findings + skipped sections.
+- **Don't claim "no issues found" without naming what you inspected.** Zero High+ findings must be backed by the file paths and grep patterns that produced that conclusion.

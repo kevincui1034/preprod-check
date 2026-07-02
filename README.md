@@ -1,11 +1,13 @@
-# Pre-Prod Readiness Check
+# 🚀 Pre-Prod Readiness Check
 
 A [Claude Code](https://code.claude.com/docs) skill that audits a project for
-production readiness across **14 categories** and produces a severity-grouped
+production readiness across **16 categories** and produces a severity-grouped
 findings report with drafted patches for trivial fixes.
 
-It adapts to your detected stack (Next.js, Auth.js, Stripe, Supabase, Drizzle,
-AI SDKs, blob storage, etc.) and skips categories that don't apply.
+It **fans the audit out across parallel sub-agents** (one per category cluster),
+merges and **verifies every Critical/High finding** before reporting, and adapts
+to your detected stack (Next.js, Auth.js, Stripe, Supabase, Drizzle, AI SDKs,
+blob storage, etc.) — skipping categories that don't apply.
 
 ## What it checks
 
@@ -13,7 +15,32 @@ Auth & multi-tenancy · input validation · billing & credit integrity · rate
 limiting · cost containment · external-request safety (SSRF, uploads) ·
 secrets / env · security headers & cookies · error handling · CORS ·
 database (indexes, backups) · logging & monitoring · email / password flows ·
-legal / compliance · operations.
+**AI / LLM safety** · **performance & scalability** · legal / compliance ·
+operations.
+
+## How it runs
+
+1. **Detect** the stack (parallel reads of `package.json`, config, schema, auth wiring).
+2. **Fan out** — one read-only sub-agent per category cluster, run concurrently, each returning evidence-bearing findings.
+3. **Merge, de-dupe, and verify** — every Critical/High is re-checked against the cited `file:line` before it reaches the report (audit agents over-flag).
+4. **Report** — severity-grouped, one line per finding, with a fix sketch.
+5. **Patch** — drafts the mechanical fixes one at a time, only on your approval.
+
+## What's new
+
+### 1.1.0
+
+- **Parallel sub-agent fan-out** — the 14→**16** categories are clustered into
+  ~6 read-only leaf agents that audit concurrently, then the main loop merges,
+  de-dupes, and **verifies every Critical/High** before reporting (audit agents
+  over-flag; verification cuts false positives).
+- **Two new categories** — **AI/LLM safety** (prompt-injection trust boundary,
+  unsanitized model output, per-request token/cost caps, agent-loop caps) and
+  **performance & scalability** (unbounded queries, N+1, serverless connection
+  pooling, hot-path caching).
+- **Readability overhaul** — an "at a glance" summary, a category-cluster map,
+  and the whole check catalog reformatted from bullet-walls into scannable
+  per-category tables with severity badges.
 
 ## Install
 
@@ -30,7 +57,7 @@ In Claude Code, run:
 ```
 
 Update later with `/plugin marketplace update preprod-check`. Because the plugin
-pins `version: 1.0.0`, you'll receive changes when that version is bumped.
+pins `version: 1.1.0`, you'll receive changes when that version is bumped.
 
 ### Option B — Drop the skill in manually
 
