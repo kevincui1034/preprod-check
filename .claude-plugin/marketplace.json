@@ -11,8 +11,8 @@
     {
       "name": "preprod-check",
       "source": "./",
-      "description": "Pre-production readiness audit across 16 categories, fanned out across parallel sub-agents. Produces a severity-grouped findings report and drafts patches for trivial fixes.",
-      "version": "1.1.0",
+      "description": "Pre-production readiness audit across 17 categories, fanned out across parallel sub-agents. Produces a severity-grouped findings report and drafts patches for trivial fixes.",
+      "version": "1.2.0",
       "keywords": [
         "security",
         "audit",

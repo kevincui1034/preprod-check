@@ -1,8 +1,8 @@
 {
   "name": "preprod-check",
   "displayName": "Pre-Prod Readiness Check",
-  "version": "1.1.0",
-  "description": "Structured pre-production readiness audit across 16 categories (auth, input validation, billing integrity, rate limiting, cost containment, SSRF/uploads, secrets, headers/cookies, CORS, DB, logging, email/password flows, AI/LLM safety, performance, legal, ops). Fans the audit out across parallel sub-agents, verifies Critical/High findings, adapts to the detected stack, and produces a severity-grouped report with drafted patches.",
+  "version": "1.2.0",
+  "description": "Structured pre-production readiness audit across 17 categories (auth, input validation, billing integrity, rate limiting, cost containment, SSRF/uploads, secrets, headers/cookies, CORS, DB, logging, email/password flows, AI/LLM safety, performance, legal, ops, release safety & operability). Fans the audit out across parallel sub-agents, verifies Critical/High findings, adapts to the detected stack, and produces a severity-grouped report with drafted patches.",
   "author": {
     "name": "Kevin Cui",
     "url": "https://github.com/kevincui1034"

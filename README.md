@@ -1,7 +1,7 @@
 # 🚀 Pre-Prod Readiness Check
 
 A [Claude Code](https://code.claude.com/docs) skill that audits a project for
-production readiness across **16 categories** and produces a severity-grouped
+production readiness across **17 categories** and produces a severity-grouped
 findings report with drafted patches for trivial fixes.
 
 It **fans the audit out across parallel sub-agents** (one per category cluster),
@@ -16,7 +16,8 @@ limiting · cost containment · external-request safety (SSRF, uploads) ·
 secrets / env · security headers & cookies · error handling · CORS ·
 database (indexes, backups) · logging & monitoring · email / password flows ·
 **AI / LLM safety** · **performance & scalability** · legal / compliance ·
-operations.
+operations · **release safety & operability** (feature flags, rollback,
+tested restore, runbook).
 
 ## How it runs
 
@@ -27,6 +28,14 @@ operations.
 5. **Patch** — drafts the mechanical fixes one at a time, only on your approval.
 
 ## What's new
+
+### 1.2.0
+
+- **New category — release safety & operability** (§17): feature flag /
+  kill-switch to disable a feature without a redeploy, rollback-safe deploys,
+  reversible/non-destructive migrations, a **rehearsed** backup restore (not
+  just backups enabled), and a linked on-call runbook. Brings the total to
+  **17 categories**.
 
 ### 1.1.0
 
@@ -57,7 +66,7 @@ In Claude Code, run:
 ```
 
 Update later with `/plugin marketplace update preprod-check`. Because the plugin
-pins `version: 1.1.0`, you'll receive changes when that version is bumped.
+pins `version: 1.2.0`, you'll receive changes when that version is bumped.
 
 ### Option B — Drop the skill in manually
 

@@ -9,18 +9,19 @@ description: >-
   external-request safety (SSRF, uploads), secrets/env, security
   headers/cookies, error handling, CORS, database, logging & monitoring,
   email/password flows, AI/LLM safety, performance & scalability,
-  legal/compliance, and operations. Adapts checks to the detected stack
+  legal/compliance, operations, and release safety & operability
+  (feature flags, rollback, backups, runbook). Adapts checks to the detected stack
   (Next.js, Auth.js, Stripe, Supabase, Drizzle, AI SDKs, blob storage, etc.),
   verifies findings before reporting, and produces a severity-grouped report
   with drafted patches for trivial fixes. Also invocable as `/preprod-check`.
 metadata:
   author: kevincui1034
-  version: "1.1.0"
+  version: "1.2.0"
 ---
 
 # 🚀 Pre-Prod Readiness Check
 
-Audit a project for production readiness across **16 categories**, then produce a **severity-grouped** report with `file:line` refs and drafted patches for the trivial fixes.
+Audit a project for production readiness across **17 categories**, then produce a **severity-grouped** report with `file:line` refs and drafted patches for the trivial fixes.
 
 ---
 
@@ -47,7 +48,7 @@ Fan the audit out along these clusters. Each is one sub-agent; skip any whose ca
 | 💳 **Money & abuse** | 3 Billing & credit integrity · 4 Rate limiting · 5 Cost containment | Critical |
 | 🛡️ **Perimeter & secrets** | 6 External-request safety (SSRF/uploads) · 7 Secrets & env · 8 Headers & cookies | Critical |
 | 🩺 **Reliability & data** | 9 Error handling · 10 Database · 11 Logging & monitoring | High |
-| 👤 **Accounts, legal & ops** | 12 Email & password · 13 Legal & compliance · 14 Operations & supply chain | High |
+| 👤 **Accounts, legal & ops** | 12 Email & password · 13 Legal & compliance · 14 Operations & supply chain · 17 Release safety & operability | High |
 | 🤖 **AI/LLM safety** | 15 AI/LLM safety *(only if an AI SDK is detected)* | High |
 | ⚡ **Performance** | 16 Performance & scalability | High |
 
@@ -308,6 +309,18 @@ The source of truth for what to inspect. Each row: **the check** · **how to det
 | Caching on expensive read-hot endpoints (or a documented reason not to) | grep for cache usage / `revalidate` | 🟡 |
 | Large payloads streamed, not buffered wholly in memory | grep routes returning big blobs/arrays | 🟡 |
 
+### 17. Release safety & operability
+
+Can you survive a bad deploy? These are as much process as code — surface the ones code can't confirm as **manual checks** in the report, but grep for the signals below.
+
+| Check | How to detect | Sev |
+|---|---|---|
+| Feature flag / kill-switch to disable a risky feature in prod **without a redeploy** | grep for a flag lib (LaunchDarkly, Statsig, Unleash, PostHog flags) or env/DB-backed toggles gating payment/AI/external-facing features; none = a bad feature can only be turned off by shipping | 🟡 |
+| Deploy is **rollback-safe** — the previous release can be redeployed cleanly | mostly process (manual check), but flag code that hard-breaks old clients: a removed/renamed API field still read by shipped clients, no API versioning, a breaking response-shape change | 🟠 |
+| Latest migration is **reversible / non-destructive** | read the newest migration for `DROP COLUMN` / `DROP TABLE` / type-narrowing with no down migration — an irreversible migration blocks the rollback above | 🟠 |
+| Backup **restore actually rehearsed** (not just backups enabled) | can't verify in code — surface as a manual check; §10 covers that backups *exist*, this covers that a restore has been *tested* (an untested backup is not a backup) | 🟠 |
+| On-call **runbook / incident playbook** exists and is linked | grep for `RUNBOOK.md` / incident docs; confirm it's referenced from the README or ops docs, not just sitting unlinked | 🟡 |
+
 ---
 
 ## Patch templates
@@ -431,6 +444,6 @@ Sentry.init({
 - **Don't report a Critical/High you haven't verified.** Agents over-flag — re-open the cited line and confirm the evidence before it reaches the report.
 - **Don't run destructive or money-spending commands.** No `db:push`, no paid API calls, no installing new deps without approval.
 - **Don't invent findings.** If you couldn't locate the relevant code, say so ("could not locate webhook handler — skipped").
-- **Don't run all 16 categories on a tiny app.** Skip inapplicable clusters rather than pad the report with N/A entries.
+- **Don't run all 17 categories on a tiny app.** Skip inapplicable clusters rather than pad the report with N/A entries.
 - **Don't echo the whole catalog back as the report.** Only findings + skipped sections.
 - **Don't claim "no issues found" without naming what you inspected.** Zero High+ findings must be backed by the file paths and grep patterns that produced that conclusion.
